@@ -19,10 +19,11 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Cài Java 8
+      # ✅ CÀI JAVA 17 ĐỂ CÀI SDK – KHÔNG ĐƯỢC DÙNG JAVA 8 CHO SDKMANAGER
+      - name: Setup Java 17 để cài Android SDK
         uses: actions/setup-java@v4
         with:
-          java-version: '8'
+          java-version: '17'
           distribution: 'zulu'
 
       - name: Cài SDK đủ build-tools + platform 34
@@ -41,6 +42,13 @@ jobs:
           exit 0
           EOF
           chmod +x $ANDROID_HOME/tools/apkbuilder
+
+      # ✅ QUAY LẠI JAVA 8 ĐỂ BUILD DỰ ÁN – code cũ chỉ chạy được Java 8
+      - name: Quay về Java 8 để build dự án
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'zulu'
 
       - name: Cài Maven
         run: |
