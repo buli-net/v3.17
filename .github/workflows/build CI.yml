@@ -1,104 +1,34 @@
-name: Build Bitcoin Wallet v3.17 Android16
-on:
-  workflow_dispatch
+# ✅ BỎ HẾT KHỐI TẠO APK THỦ CÔNG BẰNG dx/zip/apksigner
+# ✅ ĐỂ MAVEN TẠO RA APK CHUẨN, CHỈ KÝ LẠI LÀ ĐƯỢC
 
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  MAVEN_HOME: /opt/maven-3.0.5
-  PATH: /opt/maven-3.0.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+- name: Build project & tạo APK chuẩn
+  run: |
+    mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests
+    echo "=== APK được tạo tự động ==="
+    ls -la wallet/target/*.apk wallet/target/*.ap_ || true
 
-jobs:
-  build:
-    name: Build APK
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
+- name: Ký lại APK chuẩn cho Android 16
+  run: |
+    B34=$ANDROID_HOME/build-tools/34.0.0
+    SIGNER=$B34/apksigner
+    APK_RAW="wallet/target/wallet-3.17-test.apk"
+    APK_OUT="wallet/target/wallet-3.17-final.apk"
 
-      - name: Setup Java 17 for SDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
+    keytool -genkey -noprompt -keystore debug.ks -storepass android -alias d -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
 
-      - name: Install Android SDK
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "tools" "platform-tools" "build-tools;26.0.3" "build-tools;34.0.0" "platforms;android-26" "platforms;android-34"
+    $SIGNER sign --ks debug.ks \
+      --ks-pass pass:android --key-pass pass:android --ks-key-alias d \
+      --min-sdk-version 10 --max-sdk-version 36 \
+      --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+      --out "$APK_OUT" "$APK_RAW"
 
-      - name: Fix apkbuilder
-        run: |
-          cat > $ANDROID_HOME/tools/apkbuilder << 'EOF'
-          #!/bin/bash
-          [ -n "$1" ] && touch "${@: -1}"
-          exit 0
-          EOF
-          chmod +x $ANDROID_HOME/tools/apkbuilder
+    echo "✅ Kiểm tra ký & thông tin APK:"
+    $SIGNER verify --verbose "$APK_OUT"
+    $B34/aapt dump badging "$APK_OUT" | grep -E "sdkVersion|package|version"
 
-      - name: Setup Java 8 for build
-        uses: actions/setup-java@v4
-        with:
-          java-version: '8'
-          distribution: 'zulu'
-
-      - name: Install Maven
-        run: |
-          wget -q https://archive.apache.org/dist/maven/maven-3/3.0.5/binaries/apache-maven-3.0.5-bin.tar.gz
-          tar -xzf apache-maven-3.0.5-bin.tar.gz -C /opt
-          mv /opt/apache-maven-3.0.5 /opt/maven-3.0.5
-          mkdir -p ~/.m2
-          echo '<settings><mirrors><mirror><id>c</id><url>https://repo.maven.apache.org/maven2</url><mirrorOf>central</mirrorOf></mirror></mirrors></settings>' > ~/.m2/settings.xml
-
-      - name: Build bitcoinj v0.10.1
-        run: |
-          git clone --branch v0.10.1 https://github.com/bitcoinj/bitcoinj.git /tmp/bitcoinj
-          cd /tmp/bitcoinj
-          mvn clean install -DskipTests
-
-      - name: Build project
-        run: |
-          mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests
-          ls -la wallet/target/*.ap_ || true
-
-      - name: Package & sign
-        run: |
-          B26=$ANDROID_HOME/build-tools/26.0.3
-          B34=$ANDROID_HOME/build-tools/34.0.0
-          DX=$B26/dx
-          ZIPALIGN=$B34/zipalign
-          SIGNER=$B34/apksigner
-
-          AP_RAW="wallet/target/wallet-3.17-test.ap_"
-          CLS_DIR="wallet/target/classes"
-          OUT_APK="wallet/target/wallet-3.17-test.apk"
-          WORK="/tmp/apk-build"
-          rm -rf "$WORK"
-          mkdir -p "$WORK"
-
-          DEPS=$(find ~/.m2/repository -name "*.jar" | grep -E "(bitcoinj-0\.10\.1|netty-3\.6\.3|protobuf-java-2\.4\.1|guava-13\.0\.1|scrypt-1\.3\.3|logback-android)" | grep -v sources | grep -v "slf4j")
-          DEPS="$DEPS $(find ~/.m2/repository -name "slf4j-api-1.7.5.jar" | head -1)"
-
-          $DX --dex --output="$WORK/classes.dex" "$CLS_DIR" $DEPS
-
-          cd "$WORK"
-          unzip -q "$GITHUB_WORKSPACE/$AP_RAW"
-          zip -qr "$GITHUB_WORKSPACE/unsigned.apk" .
-
-          cd "$GITHUB_WORKSPACE"
-          $ZIPALIGN -f 4 unsigned.apk aligned.apk
-
-          keytool -genkey -noprompt -keystore debug.ks -storepass android -alias d -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
-          $SIGNER sign --ks debug.ks --ks-pass pass:android --key-pass pass:android --ks-key-alias d --min-sdk-version 10 --max-sdk-version 36 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out "$OUT_APK" aligned.apk
-
-          $SIGNER verify --verbose "$OUT_APK"
-          $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package"
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Bitcoin-Wallet-v3.17-Android16
-          path: wallet/target/wallet-3.17-test.apk
-          retention-days: 7
+- name: Upload APK
+  uses: actions/upload-artifact@v4
+  with:
+    name: Bitcoin-Wallet-v3.17-Android16
+    path: wallet/target/wallet-3.17-final.apk
+    retention-days: 7
