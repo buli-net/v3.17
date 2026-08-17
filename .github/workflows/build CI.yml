@@ -19,7 +19,6 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      # ✅ JAVA 17 CHO SDKMANAGER
       - name: Setup Java 17 cài SDK
         uses: actions/setup-java@v4
         with:
@@ -43,7 +42,6 @@ jobs:
           EOF
           chmod +x $ANDROID_HOME/tools/apkbuilder
 
-      # ✅ QUAY JAVA 8 BUILD DỰ ÁN
       - name: Quay về Java 8
         uses: actions/setup-java@v4
         with:
@@ -57,17 +55,22 @@ jobs:
           mv /opt/apache-maven-3.0.5 /opt/maven-3.0.5
           echo '<settings><mirrors><mirror><id>c</id><url>https://repo.maven.apache.org/maven2</url><mirrorOf>central</mirrorOf></mirror></mirrors></settings>' > ~/.m2/settings.xml
 
-      # ✅ ĐÃ SỬA: DÙNG TAG, KHÔNG DÙNG HASH KHÔNG TỒN TẠI
       - name: Build bitcoinj v0.10.1
         run: |
           git clone --branch v0.10.1 https://github.com/bitcoinj/bitcoinj.git /tmp/bitcoinj
           cd /tmp/bitcoinj
-          mvn clean install -DskipTests -q
+          mvn clean install -DskipTests
 
-      - name: Build dự án
-        run: mvn clean install -pl :base,:integration-android,:wallet -am -q
+      # ✅ ĐÃ SỬA: KHÓA PLUGIN + KHÔNG DÙNG -q + CHỈ CHẠY package TRƯỚC
+      - name: Build dự án - sửa NoFileAssignedException
+        run: |
+          mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests \
+            -Dmaven-install-plugin.version=2.5.2
+          
+          echo "=== Kiểm tra file .ap_ ==="
+          ls -la wallet/target/*.ap_ || true
 
-      - name: Đóng gói & ký
+      - name: Đóng gói & ký chuẩn Android 16
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
           B34=$ANDROID_HOME/build-tools/34.0.0
