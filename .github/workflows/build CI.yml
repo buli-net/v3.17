@@ -1,6 +1,6 @@
 name: Build Bitcoin Wallet v3.17 Android16
 
-# ✅ BẮT BUỘC ĐỂ HIỆN NÚT RUN THỦ CÔNG
+# ✅ BẮT BUỘC – ĐỂ HIỆN NÚT RUN THỦ CÔNG
 on:
   workflow_dispatch:
 
@@ -79,7 +79,8 @@ EOF
           echo "=== Kiểm tra file .ap_ ==="
           ls -la wallet/target/*.ap_ || true
 
-      - name: Đóng gói & ký chuẩn - đã sửa trùng lặp slf4j
+      # ✅ ĐÃ SỬA CÚ PHÁP – KHÔNG GẠCH ĐỎ
+      - name: Đóng gói & ký chuẩn - sửa trùng lặp slf4j
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
           B34=$ANDROID_HOME/build-tools/34.0.0
