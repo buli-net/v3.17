@@ -1,6 +1,4 @@
 name: Build Bitcoin Wallet v3.17 Android16
-
-# ✅ BẮT BUỘC – ĐỂ HIỆN NÚT RUN THỦ CÔNG
 on:
   workflow_dispatch:
 
@@ -20,13 +18,13 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Cài Java 17 để cài Android SDK
+      - name: Cài Java 17 cài SDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Cài SDK và build-tools
+      - name: Cài SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
@@ -43,7 +41,7 @@ jobs:
           EOF
           chmod +x $ANDROID_HOME/tools/apkbuilder
 
-      - name: Quay về Java 8 để build dự án cũ
+      - name: Quay Java 8 build
         uses: actions/setup-java@v4
         with:
           java-version: '8'
@@ -73,14 +71,12 @@ EOF
           cd /tmp/bitcoinj
           mvn clean install -DskipTests
 
-      - name: Build dự án - chỉ chạy package
+      - name: Build dự án
         run: |
           mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests
-          echo "=== Kiểm tra file .ap_ ==="
           ls -la wallet/target/*.ap_ || true
 
-      # ✅ ĐÃ SỬA CÚ PHÁP – KHÔNG GẠCH ĐỎ
-      - name: Đóng gói & ký chuẩn - sửa trùng lặp slf4j
+      - name: Đóng gói & ký
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
           B34=$ANDROID_HOME/build-tools/34.0.0
@@ -99,7 +95,6 @@ EOF
           DEPS="$DEPS $(find ~/.m2/repository -name "slf4j-api-1.7.5.jar" | head -1)"
 
           $DX --dex --output="$WORK/classes.dex" "$CLS_DIR" $DEPS
-
           cd "$WORK"
           unzip -q "$GITHUB_WORKSPACE/$AP_RAW"
           cp classes.dex .
@@ -108,21 +103,13 @@ EOF
           cd "$GITHUB_WORKSPACE"
           $ZIPALIGN -f 4 unsigned.apk aligned.apk
 
-          keytool -genkey -noprompt -keystore debug.ks \
-            -storepass android -alias d -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
+          keytool -genkey -noprompt -keystore debug.ks -storepass android -alias d -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
+          $SIGNER sign --ks debug.ks --ks-pass pass:android --key-pass pass:android --ks-key-alias d --min-sdk-version 10 --max-sdk-version 36 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out "$OUT_APK" aligned.apk
 
-          $SIGNER sign --ks debug.ks \
-            --ks-pass pass:android --key-pass pass:android --ks-key-alias d \
-            --min-sdk-version 10 --max-sdk-version 36 \
-            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
-            --out "$OUT_APK" aligned.apk
-
-          echo "✅ Kiểm tra APK:"
           $SIGNER verify --verbose "$OUT_APK"
-          $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package|version"
+          $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package"
 
-      - name: Lưu kết quả APK
+      - name: Lưu APK
         uses: actions/upload-artifact@v4
         with:
           name: Bitcoin-Wallet-v3.17-Android16-FINAL
