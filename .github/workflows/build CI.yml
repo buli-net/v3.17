@@ -1,7 +1,8 @@
 name: Build Bitcoin Wallet v3.17 Android16
 
+# ✅ BẮT BUỘC ĐỂ HIỆN NÚT RUN THỦ CÔNG
 on:
-  workflow_dispatch
+  workflow_dispatch:
 
 env:
   ANDROID_HOME: /usr/local/lib/android/sdk
@@ -93,7 +94,6 @@ EOF
           rm -rf "$WORK"
           mkdir -p "$WORK"
 
-          # ✅ Lọc bỏ slf4j trùng, chỉ giữ đúng bản trong pom.xml
           DEPS=$(find ~/.m2/repository -name "*.jar" | grep -E "(bitcoinj-0\.10\.1|netty-3\.6\.3|protobuf-java-2\.4\.1|guava-13\.0\.1|scrypt-1\.3\.3|logback-android)" | grep -v sources | grep -v "slf4j")
           DEPS="$DEPS $(find ~/.m2/repository -name "slf4j-api-1.7.5.jar" | head -1)"
 
