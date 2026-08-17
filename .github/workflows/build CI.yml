@@ -61,13 +61,13 @@ jobs:
           cd /tmp/bitcoinj
           mvn clean install -DskipTests
 
-      # ✅ ĐÃ SỬA: KHÓA PLUGIN + KHÔNG DÙNG -q + CHỈ CHẠY package TRƯỚC
-      - name: Build dự án - sửa NoFileAssignedException
+      # ✅ ĐÃ SỬA: CHỈ CHẠY package, KHÔNG CHẠY install
+      - name: Build dự án - KHẮC PHỤC LỖI
         run: |
           mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests \
-            -Dmaven-install-plugin.version=2.5.2
-          
-          echo "=== Kiểm tra file .ap_ ==="
+            -Dmaven-install-plugin.skip=true
+
+          echo "=== File .ap_ đã tạo ==="
           ls -la wallet/target/*.ap_ || true
 
       - name: Đóng gói & ký chuẩn Android 16
