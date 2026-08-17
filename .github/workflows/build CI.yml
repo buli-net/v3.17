@@ -58,13 +58,11 @@ jobs:
           cd /tmp/bitcoinj
           mvn clean install -DskipTests
 
-      # ✅ CHỈ ĐỔI install THÀNH package – KHÔNG ĐỔI GÌ KHÁC
       - name: Build project
         run: |
           mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests
           ls -la wallet/target/*.ap_ || true
 
-      # ✅ CHỈ SỬA LỌC SLF4J TRÙNG – KHÔNG ĐỔI CẤU TRÚC
       - name: Package & sign
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
@@ -84,9 +82,9 @@ jobs:
           DEPS="$DEPS $(find ~/.m2/repository -name "slf4j-api-1.7.5.jar" | head -1)"
 
           $DX --dex --output="$WORK/classes.dex" "$CLS_DIR" $DEPS
+
           cd "$WORK"
           unzip -q "$GITHUB_WORKSPACE/$AP_RAW"
-          cp classes.dex .
           zip -qr "$GITHUB_WORKSPACE/unsigned.apk" .
 
           cd "$GITHUB_WORKSPACE"
