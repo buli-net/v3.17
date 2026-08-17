@@ -1,0 +1,39 @@
+name: unzip wallet
+on:
+  push:
+    paths:
+      - '**.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unzip bitcoin-wallet-main.zip
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq unzip
+          if [ -f "bitcoin-wallet-main.zip" ]; then
+            unzip -o bitcoin-wallet-main.zip
+            if [ -d "bitcoin-wallet-main" ]; then
+              shopt -s dotglob
+              mv bitcoin-wallet-main/* .
+              rm -rf bitcoin-wallet-main
+            fi
+            rm -f bitcoin-wallet-main.zip
+          fi
+
+      - name: Commit extracted files
+        run: |
+          git config user.name "buli-net-bot"
+          git config user.email "bot@buli-net.com"
+          git add -A
+          git diff --quiet && git diff --staged --quiet || git commit -m "unzip bitcoin-wallet-main.zip"
+          git push
