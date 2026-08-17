@@ -1,4 +1,4 @@
-name: Build Bitcoin Wallet v3.17
+name: Build Bitcoin Wallet v3.17 Android16
 
 on:
   workflow_dispatch
@@ -10,34 +10,28 @@ env:
 
 jobs:
   build:
-    name: Build APK v3.17
+    name: Build APK cho Android 16
     runs-on: ubuntu-latest
     steps:
-      # ✅ Lấy thẳng code từ nhánh main, KHÔNG DÙNG FILE ZIP
-      - name: Lấy mã nguồn v3.17
+      - name: Lấy code nhánh main
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Kiểm tra manifest
-        run: |
-          echo "=== targetSdk hiện tại ==="
-          grep "targetSdkVersion" wallet/AndroidManifest.xml
-
-      - name: Cài đặt Java 8
+      - name: Cài Java 8
         uses: actions/setup-java@v4
         with:
           java-version: '8'
           distribution: 'zulu'
 
-      - name: Cài đặt Android SDK
+      - name: Cài SDK đủ build-tools + platform 34
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "tools" "platform-tools" \
-            "build-tools;26.0.3" "build-tools;33.0.2" \
-            "platforms;android-26" "platforms;android-33"
+            "build-tools;26.0.3" "build-tools;34.0.0" \
+            "platforms;android-26" "platforms;android-34"
 
       - name: Tạo apkbuilder giả
         run: |
@@ -48,25 +42,14 @@ jobs:
           EOF
           chmod +x $ANDROID_HOME/tools/apkbuilder
 
-      - name: Cài đặt Maven + HTTPS
+      - name: Cài Maven
         run: |
           wget -q https://archive.apache.org/dist/maven/maven-3/3.0.5/binaries/apache-maven-3.0.5-bin.tar.gz
           tar -xzf apache-maven-3.0.5-bin.tar.gz -C /opt
           mv /opt/apache-maven-3.0.5 /opt/maven-3.0.5
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml << 'EOF'
-<settings>
-  <mirrors>
-    <mirror>
-      <id>central</id>
-      <url>https://repo.maven.apache.org/maven2</url>
-      <mirrorOf>central</mirrorOf>
-    </mirror>
-  </mirrors>
-</settings>
-EOF
+          echo '<settings><mirrors><mirror><id>c</id><url>https://repo.maven.apache.org/maven2</url><mirrorOf>central</mirrorOf></mirror></mirrors></settings>' > ~/.m2/settings.xml
 
-      - name: Build bitcoinj 0.10.1
+      - name: Build bitcoinj
         run: |
           git clone --depth 1 https://github.com/bitcoinj/bitcoinj.git /tmp/bitcoinj
           cd /tmp/bitcoinj
@@ -76,13 +59,13 @@ EOF
       - name: Build dự án
         run: mvn clean install -pl :base,:integration-android,:wallet -am -q
 
-      - name: Đóng gói & ký chuẩn
+      - name: Đóng gói & ký chuẩn Android 16
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
-          B33=$ANDROID_HOME/build-tools/33.0.2
+          B34=$ANDROID_HOME/build-tools/34.0.0
           DX=$B26/dx
-          ZIPALIGN=$B33/zipalign
-          SIGNER=$B33/apksigner
+          ZIPALIGN=$B34/zipalign
+          SIGNER=$B34/apksigner
 
           AP_RAW="wallet/target/wallet-3.17-test.ap_"
           CLS_DIR="wallet/target/classes"
@@ -108,18 +91,17 @@ EOF
 
           $SIGNER sign --ks debug.ks \
             --ks-pass pass:android --key-pass pass:android --ks-key-alias d \
-            --min-sdk-version 10 --max-sdk-version 35 \
+            --min-sdk-version 10 --max-sdk-version 36 \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
             --out "$OUT_APK" aligned.apk
 
-          echo "✅ Kết quả:"
-          ls -la "$OUT_APK"
+          echo "✅ Kiểm tra:"
           $SIGNER verify --verbose "$OUT_APK"
-          $B33/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package"
+          $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package"
 
       - name: Lưu APK
         uses: actions/upload-artifact@v4
         with:
-          name: Bitcoin-Wallet-v3.17-Final
+          name: Bitcoin-Wallet-v3.17-Android16
           path: wallet/target/wallet-3.17-test.apk
           retention-days: 7
