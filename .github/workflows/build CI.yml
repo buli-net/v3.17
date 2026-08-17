@@ -19,14 +19,14 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      # ✅ CÀI JAVA 17 ĐỂ CÀI SDK – KHÔNG ĐƯỢC DÙNG JAVA 8 CHO SDKMANAGER
-      - name: Setup Java 17 để cài Android SDK
+      # ✅ JAVA 17 CHO SDKMANAGER
+      - name: Setup Java 17 cài SDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Cài SDK đủ build-tools + platform 34
+      - name: Cài SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
@@ -43,8 +43,8 @@ jobs:
           EOF
           chmod +x $ANDROID_HOME/tools/apkbuilder
 
-      # ✅ QUAY LẠI JAVA 8 ĐỂ BUILD DỰ ÁN – code cũ chỉ chạy được Java 8
-      - name: Quay về Java 8 để build dự án
+      # ✅ QUAY JAVA 8 BUILD DỰ ÁN
+      - name: Quay về Java 8
         uses: actions/setup-java@v4
         with:
           java-version: '8'
@@ -57,17 +57,17 @@ jobs:
           mv /opt/apache-maven-3.0.5 /opt/maven-3.0.5
           echo '<settings><mirrors><mirror><id>c</id><url>https://repo.maven.apache.org/maven2</url><mirrorOf>central</mirrorOf></mirror></mirrors></settings>' > ~/.m2/settings.xml
 
-      - name: Build bitcoinj
+      # ✅ ĐÃ SỬA: DÙNG TAG, KHÔNG DÙNG HASH KHÔNG TỒN TẠI
+      - name: Build bitcoinj v0.10.1
         run: |
-          git clone --depth 1 https://github.com/bitcoinj/bitcoinj.git /tmp/bitcoinj
+          git clone --branch v0.10.1 https://github.com/bitcoinj/bitcoinj.git /tmp/bitcoinj
           cd /tmp/bitcoinj
-          git checkout b4a57eb8055a54fd3aab6133835d91d9967d9f98
           mvn clean install -DskipTests -q
 
       - name: Build dự án
         run: mvn clean install -pl :base,:integration-android,:wallet -am -q
 
-      - name: Đóng gói & ký chuẩn Android 16
+      - name: Đóng gói & ký
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
           B34=$ANDROID_HOME/build-tools/34.0.0
@@ -93,17 +93,9 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           $ZIPALIGN -f 4 unsigned.apk aligned.apk
 
-          keytool -genkey -noprompt -keystore debug.ks \
-            -storepass android -alias d -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
+          keytool -genkey -noprompt -keystore debug.ks -storepass android -alias d -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
+          $SIGNER sign --ks debug.ks --ks-pass pass:android --key-pass pass:android --ks-key-alias d --min-sdk-version 10 --max-sdk-version 36 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out "$OUT_APK" aligned.apk
 
-          $SIGNER sign --ks debug.ks \
-            --ks-pass pass:android --key-pass pass:android --ks-key-alias d \
-            --min-sdk-version 10 --max-sdk-version 36 \
-            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
-            --out "$OUT_APK" aligned.apk
-
-          echo "✅ Kiểm tra:"
           $SIGNER verify --verbose "$OUT_APK"
           $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package"
 
