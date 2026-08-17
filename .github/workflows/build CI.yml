@@ -10,22 +10,22 @@ env:
 
 jobs:
   build:
-    name: Build APK cho Android 16
+    name: Build APK hoàn chỉnh
     runs-on: ubuntu-latest
     steps:
-      - name: Lấy code nhánh main
+      - name: Lấy mã nguồn nhánh main
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Setup Java 17 cài SDK
+      - name: Cài Java 17 để cài Android SDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Cài SDK
+      - name: Cài SDK và build-tools
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
@@ -42,7 +42,7 @@ jobs:
           EOF
           chmod +x $ANDROID_HOME/tools/apkbuilder
 
-      - name: Quay về Java 8
+      - name: Quay về Java 8 để build dự án cũ
         uses: actions/setup-java@v4
         with:
           java-version: '8'
@@ -53,7 +53,18 @@ jobs:
           wget -q https://archive.apache.org/dist/maven/maven-3/3.0.5/binaries/apache-maven-3.0.5-bin.tar.gz
           tar -xzf apache-maven-3.0.5-bin.tar.gz -C /opt
           mv /opt/apache-maven-3.0.5 /opt/maven-3.0.5
-          echo '<settings><mirrors><mirror><id>c</id><url>https://repo.maven.apache.org/maven2</url><mirrorOf>central</mirrorOf></mirror></mirrors></settings>' > ~/.m2/settings.xml
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+<settings>
+  <mirrors>
+    <mirror>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>
+EOF
 
       - name: Build bitcoinj v0.10.1
         run: |
@@ -61,16 +72,13 @@ jobs:
           cd /tmp/bitcoinj
           mvn clean install -DskipTests
 
-      # ✅ ĐÃ SỬA: CHỈ CHẠY package, KHÔNG CHẠY install
-      - name: Build dự án - KHẮC PHỤC LỖI
+      - name: Build dự án - chỉ chạy package
         run: |
-          mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests \
-            -Dmaven-install-plugin.skip=true
-
-          echo "=== File .ap_ đã tạo ==="
+          mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests
+          echo "=== Kiểm tra file .ap_ ==="
           ls -la wallet/target/*.ap_ || true
 
-      - name: Đóng gói & ký chuẩn Android 16
+      - name: Đóng gói & ký chuẩn - đã sửa trùng lặp slf4j
         run: |
           B26=$ANDROID_HOME/build-tools/26.0.3
           B34=$ANDROID_HOME/build-tools/34.0.0
@@ -85,7 +93,10 @@ jobs:
           rm -rf "$WORK"
           mkdir -p "$WORK"
 
-          DEPS=$(find ~/.m2/repository -name "*.jar" | grep -E "(bitcoinj-0\.10\.1|netty-3\.6\.3|protobuf-java-2\.4\.1|guava-13\.0\.1|scrypt-1\.3\.3|slf4j-api|logback-android)" | grep -v sources)
+          # ✅ Lọc bỏ slf4j trùng, chỉ giữ đúng bản trong pom.xml
+          DEPS=$(find ~/.m2/repository -name "*.jar" | grep -E "(bitcoinj-0\.10\.1|netty-3\.6\.3|protobuf-java-2\.4\.1|guava-13\.0\.1|scrypt-1\.3\.3|logback-android)" | grep -v sources | grep -v "slf4j")
+          DEPS="$DEPS $(find ~/.m2/repository -name "slf4j-api-1.7.5.jar" | head -1)"
+
           $DX --dex --output="$WORK/classes.dex" "$CLS_DIR" $DEPS
 
           cd "$WORK"
@@ -96,15 +107,23 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           $ZIPALIGN -f 4 unsigned.apk aligned.apk
 
-          keytool -genkey -noprompt -keystore debug.ks -storepass android -alias d -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
-          $SIGNER sign --ks debug.ks --ks-pass pass:android --key-pass pass:android --ks-key-alias d --min-sdk-version 10 --max-sdk-version 36 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out "$OUT_APK" aligned.apk
+          keytool -genkey -noprompt -keystore debug.ks \
+            -storepass android -alias d -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
 
+          $SIGNER sign --ks debug.ks \
+            --ks-pass pass:android --key-pass pass:android --ks-key-alias d \
+            --min-sdk-version 10 --max-sdk-version 36 \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out "$OUT_APK" aligned.apk
+
+          echo "✅ Kiểm tra APK:"
           $SIGNER verify --verbose "$OUT_APK"
-          $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package"
+          $B34/aapt dump badging "$OUT_APK" | grep -E "sdkVersion|package|version"
 
-      - name: Lưu APK
+      - name: Lưu kết quả APK
         uses: actions/upload-artifact@v4
         with:
-          name: Bitcoin-Wallet-v3.17-Android16
+          name: Bitcoin-Wallet-v3.17-Android16-FINAL
           path: wallet/target/wallet-3.17-test.apk
           retention-days: 7
