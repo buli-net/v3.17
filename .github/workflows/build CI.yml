@@ -27,7 +27,7 @@ jobs:
       - name: Install Android SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "tools" "platform-tools" "build-tools;26.0.3" "build-tools;34.0.0" "platforms;android-26" "platforms;android-34"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "tools" "platform-tools" "build-tools;26.0.3" "build-tools;34.0.0" "platforms;android-14" "platforms;android-26" "platforms;android-34"
 
       - name: Fix apkbuilder
         run: |
@@ -58,19 +58,23 @@ jobs:
           cd /tmp/bitcoinj
           mvn clean install -DskipTests
 
-      # ✅ ĐỂ MAVEN TẠO APK CHUẨN, KHÔNG TẠO THỦ CÔNG NỮA
-      - name: Build project & tạo APK gốc
+      - name: Build project
         run: |
           mvn clean package -pl :base,:integration-android,:wallet -am -DskipTests
-          ls -la wallet/target/*.apk || true
+          ls -la wallet/target/ | grep -E "\.ap_" || true
 
-      # ✅ CHỈ KÝ LẠI ĐỦ CHUẨN
-      - name: Ký APK chuẩn
+      - name: Gói & ký APK chuẩn
         run: |
+          B26=$ANDROID_HOME/build-tools/26.0.3
           B34=$ANDROID_HOME/build-tools/34.0.0
+          APKBUILDER=$B26/apkbuilder
           SIGNER=$B34/apksigner
-          APK_SRC="wallet/target/wallet-3.17-test.apk"
+
+          AP_RAW="wallet/target/wallet-3.17-test.ap_"
+          APK_UNSIGNED="wallet/target/unsigned.apk"
           APK_FINAL="wallet/target/wallet-3.17-final.apk"
+
+          $APKBUILDER $AP_RAW -d $ANDROID_HOME/platforms/android-14/android.jar -o $APK_UNSIGNED
 
           keytool -genkey -noprompt -keystore debug.ks -storepass android -alias d -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
 
@@ -78,10 +82,10 @@ jobs:
             --ks-pass pass:android --key-pass pass:android --ks-key-alias d \
             --min-sdk-version 10 --max-sdk-version 36 \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
-            --out "$APK_FINAL" "$APK_SRC"
+            --out "$APK_FINAL" "$APK_UNSIGNED"
 
           $SIGNER verify --verbose "$APK_FINAL"
-          $B34/aapt dump badging "$APK_FINAL" | grep -E "package|versionCode|versionName|sdkVersion"
+          $B34/aapt dump badging "$APK_FINAL" | grep -E "package|sdkVersion"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
